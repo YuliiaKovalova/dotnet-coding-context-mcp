@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>DotnetCodingContextMCP</RootNamespace>
+    <AssemblyName>DotnetCodingContextMCP</AssemblyName>
+    <Description>MCP server that gives AI agents the coding context they need to write compilable C# code — type signatures, constructors, mock patterns, and test conventions in a single call.</Description>
+    <PackAsTool>true</PackAsTool>
+    <PackageId>DotnetCodingContextMCP</PackageId>
+    <ToolCommandName>coding-context-mcp</ToolCommandName>
+    <IsPackable>true</IsPackable>
+    <Version>0.3.1</Version>
+    <Authors>YuliiaKovalova</Authors>
+    <PackageProjectUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>mcp;roslyn;code-analysis;ai;copilot;test-generation;coding-context</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.13.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.13.0" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="ModelContextProtocol" Version="0.2.0-preview.2" />
+  </ItemGroup>
+
+</Project>
