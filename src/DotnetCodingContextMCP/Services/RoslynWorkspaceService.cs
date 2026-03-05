@@ -73,7 +73,9 @@ public sealed class RoslynWorkspaceService : IDisposable
             var symbols = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, ct);
             foreach (var symbol in symbols)
             {
-                if (symbol is INamedTypeSymbol nts && nts.DeclaredAccessibility == Accessibility.Public)
+                if (symbol is INamedTypeSymbol nts &&
+                    nts.DeclaredAccessibility == Accessibility.Public &&
+                    nts.Locations.Any(l => l.IsInSource))
                 {
                     results.Add(nts);
                 }
@@ -106,7 +108,8 @@ public sealed class RoslynWorkspaceService : IDisposable
             {
                 if (symbol is INamedTypeSymbol nts &&
                     (nts.DeclaredAccessibility == Accessibility.Public ||
-                     nts.DeclaredAccessibility == Accessibility.Internal))
+                     nts.DeclaredAccessibility == Accessibility.Internal) &&
+                    nts.Locations.Any(l => l.IsInSource))
                 {
                     results.Add(nts);
                 }

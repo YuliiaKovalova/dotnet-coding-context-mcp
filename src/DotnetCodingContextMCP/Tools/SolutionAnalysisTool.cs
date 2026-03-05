@@ -47,8 +47,7 @@ public sealed class SolutionAnalysisTool
                 var allTypes = GetAllNamedTypes(compilation.GlobalNamespace)
                     .Where(t => t.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal)
                     .Where(t => !t.IsAbstract || t.TypeKind == TypeKind.Interface)
-                    .Where(t => t.ContainingNamespace?.ToDisplayString() is not null
-                                and not "System" and not "Microsoft")
+                    .Where(t => t.Locations.Any(l => l.IsInSource))
                     .ToList();
 
                 foreach (var type in allTypes)
