@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.MSBuild;
+using Microsoft.Extensions.Logging;
 using DotnetCodingContextMCP.Models;
 
 namespace DotnetCodingContextMCP.Services;
@@ -11,42 +12,51 @@ public sealed class RoslynWorkspaceService : IDisposable
 {
     private MSBuildWorkspace? _workspace;
     private Solution? _solution;
+    private string? _loadedPath;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ILogger<RoslynWorkspaceService> _logger;
+
+    public RoslynWorkspaceService(ILogger<RoslynWorkspaceService> logger)
+    {
+        _logger = logger;
+    }
 
     public async Task<Solution> LoadSolutionAsync(string path, CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
         try
         {
+            // Return cached workspace if same path
+            var resolvedPath = ResolvePath(path);
+            if (_solution is not null && _loadedPath == resolvedPath)
+            {
+                return _solution;
+            }
+
             _workspace?.Dispose();
             _workspace = MSBuildWorkspace.Create();
-            _workspace.WorkspaceFailed += (_, e) => { /* suppress diagnostics */ };
+            _workspace.WorkspaceFailed += (_, e) =>
+            {
+                _logger.LogWarning("MSBuild workspace issue: {Kind} — {Message}", e.Diagnostic.Kind, e.Diagnostic.Message);
+            };
 
-            if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
+            if (resolvedPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
+                resolvedPath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
             {
-                _solution = await _workspace.OpenSolutionAsync(path, cancellationToken: ct);
+                _solution = await _workspace.OpenSolutionAsync(resolvedPath, cancellationToken: ct);
             }
-            else if (path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            else if (resolvedPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                var project = await _workspace.OpenProjectAsync(path, cancellationToken: ct);
+                var project = await _workspace.OpenProjectAsync(resolvedPath, cancellationToken: ct);
                 _solution = project.Solution;
             }
             else
             {
-                // Try to find .sln in directory
-                var slnFile = Directory.GetFiles(path, "*.sln").FirstOrDefault()
-                           ?? Directory.GetFiles(path, "*.slnx").FirstOrDefault();
-                if (slnFile != null)
-                {
-                    _solution = await _workspace.OpenSolutionAsync(slnFile, cancellationToken: ct);
-                }
-                else
-                {
-                    throw new InvalidOperationException($"No solution or project file found at: {path}");
-                }
+                throw new InvalidOperationException($"No solution or project file found at: {path}");
             }
 
+            _loadedPath = resolvedPath;
+            _logger.LogInformation("Loaded workspace: {Path} ({ProjectCount} projects)", resolvedPath, _solution.Projects.Count());
             return _solution;
         }
         finally
@@ -57,6 +67,21 @@ public sealed class RoslynWorkspaceService : IDisposable
 
     public Solution GetSolution() =>
         _solution ?? throw new InvalidOperationException("No solution loaded. Call load_solution or provide a path.");
+
+    private static string ResolvePath(string path)
+    {
+        if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFullPath(path);
+        }
+
+        // Try to find .sln in directory
+        var slnFile = Directory.GetFiles(path, "*.sln").FirstOrDefault()
+                   ?? Directory.GetFiles(path, "*.slnx").FirstOrDefault();
+        return slnFile is not null ? Path.GetFullPath(slnFile) : Path.GetFullPath(path);
+    }
 
     public async Task<IReadOnlyList<INamedTypeSymbol>> FindTypesByNameAsync(
         string typeName, Solution? solution = null, CancellationToken ct = default)
@@ -206,7 +231,7 @@ public sealed class RoslynWorkspaceService : IDisposable
             .ToList();
     }
 
-    public IReadOnlyList<InterfaceMember> ExtractInterfaceMembers(INamedTypeSymbol interfaceType)
+    public IReadOnlyList<InterfaceMember> ExtractInterfaceMembers(INamedTypeSymbol interfaceType, string mockingLibrary = "Moq")
     {
         var members = new List<InterfaceMember>();
 
@@ -219,17 +244,18 @@ public sealed class RoslynWorkspaceService : IDisposable
                     Name = method.Name,
                     ReturnType = method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                     Signature = FormatMethodSignature(method),
-                    MockSetup = GenerateMockSetup(method),
+                    MockSetup = GenerateMockSetup(method, mockingLibrary),
                 });
             }
             else if (member is IPropertySymbol prop)
             {
+                var propType = prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                 members.Add(new InterfaceMember
                 {
                     Name = prop.Name,
-                    ReturnType = prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                    Signature = $"{prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {prop.Name} {{ {(prop.GetMethod != null ? "get; " : "")}{(prop.SetMethod != null ? "set; " : "")}}}",
-                    MockSetup = $"mock.Setup(x => x.{prop.Name}).Returns(default({prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}))",
+                    ReturnType = propType,
+                    Signature = $"{propType} {prop.Name} {{ {(prop.GetMethod != null ? "get; " : "")}{(prop.SetMethod != null ? "set; " : "")}}}",
+                    MockSetup = GeneratePropertyMockSetup(prop, mockingLibrary),
                 });
             }
         }
@@ -508,7 +534,28 @@ public sealed class RoslynWorkspaceService : IDisposable
         return start > 0 && end > start ? genericType[start..end] : "object";
     }
 
-    private static string GenerateMockSetup(IMethodSymbol method)
+    internal static string GenerateMockSetup(IMethodSymbol method, string library = "Moq")
+    {
+        return library switch
+        {
+            "NSubstitute" => GenerateNSubstituteMockSetup(method),
+            "FakeItEasy" => GenerateFakeItEasyMockSetup(method),
+            _ => GenerateMoqMockSetup(method),
+        };
+    }
+
+    private static string GeneratePropertyMockSetup(IPropertySymbol prop, string library)
+    {
+        var propType = prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+        return library switch
+        {
+            "NSubstitute" => $"substitute.{prop.Name}.Returns(default({propType})!)",
+            "FakeItEasy" => $"A.CallTo(() => fake.{prop.Name}).Returns(default({propType})!)",
+            _ => $"mock.Setup(x => x.{prop.Name}).Returns(default({propType})!)",
+        };
+    }
+
+    private static string GenerateMoqMockSetup(IMethodSymbol method)
     {
         var parameters = string.Join(", ", method.Parameters.Select(p =>
             $"It.IsAny<{p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>()"));
@@ -522,18 +569,52 @@ public sealed class RoslynWorkspaceService : IDisposable
 
         var returnDisplay = returnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
-        // Handle Task/Task<T>
         if (returnDisplay == "Task")
-        {
             return $"mock.Setup({call}).Returns(Task.CompletedTask)";
-        }
         if (returnDisplay.StartsWith("Task<", StringComparison.Ordinal))
-        {
-            var innerType = returnDisplay[5..^1];
-            return $"mock.Setup({call}).ReturnsAsync(default({innerType})!)";
-        }
+            return $"mock.Setup({call}).ReturnsAsync(default({returnDisplay[5..^1]})!)";
 
         return $"mock.Setup({call}).Returns(default({returnDisplay})!)";
+    }
+
+    private static string GenerateNSubstituteMockSetup(IMethodSymbol method)
+    {
+        var parameters = string.Join(", ", method.Parameters.Select(p =>
+            $"Arg.Any<{p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>()"));
+        var call = $"substitute.{method.Name}({parameters})";
+
+        var returnType = method.ReturnType;
+        if (returnType.SpecialType == SpecialType.System_Void)
+            return call;
+
+        var returnDisplay = returnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+        if (returnDisplay == "Task")
+            return $"{call}.Returns(Task.CompletedTask)";
+        if (returnDisplay.StartsWith("Task<", StringComparison.Ordinal))
+            return $"{call}.Returns(default({returnDisplay[5..^1]})!)";
+
+        return $"{call}.Returns(default({returnDisplay})!)";
+    }
+
+    private static string GenerateFakeItEasyMockSetup(IMethodSymbol method)
+    {
+        var parameters = string.Join(", ", method.Parameters.Select(p =>
+            $"A<{p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>._"));
+        var call = $"A.CallTo(() => fake.{method.Name}({parameters}))";
+
+        var returnType = method.ReturnType;
+        if (returnType.SpecialType == SpecialType.System_Void)
+            return $"{call}.DoesNothing()";
+
+        var returnDisplay = returnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+        if (returnDisplay == "Task")
+            return $"{call}.Returns(Task.CompletedTask)";
+        if (returnDisplay.StartsWith("Task<", StringComparison.Ordinal))
+            return $"{call}.Returns(default({returnDisplay[5..^1]})!)";
+
+        return $"{call}.Returns(default({returnDisplay})!)";
     }
 
     private static string GetTypeKind(INamedTypeSymbol type)

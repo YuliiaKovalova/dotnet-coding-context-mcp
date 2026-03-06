@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RootNamespace>DotnetCodingContextMCP</RootNamespace>
     <AssemblyName>DotnetCodingContextMCP</AssemblyName>
     <Description>MCP server that gives AI agents the coding context they need to write compilable C# code — type signatures, constructors, mock patterns, and test conventions in a single call.</Description>
@@ -10,7 +10,7 @@
     <PackageId>DotnetCodingContextMCP</PackageId>
     <ToolCommandName>coding-context-mcp</ToolCommandName>
     <IsPackable>true</IsPackable>
-    <Version>0.3.3</Version>
+    <Version>0.4.0</Version>
     <Authors>YuliiaKovalova</Authors>
     <PackageProjectUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</RepositoryUrl>
@@ -30,7 +30,12 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.13.0" />
     <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageReference Include="ModelContextProtocol" Version="0.2.0-preview.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+    <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotnetCodingContextMCP.Tests" />
   </ItemGroup>
 
 </Project>

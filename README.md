@@ -176,7 +176,7 @@ Existing Roslyn MCP servers expose many granular tools designed for **code explo
 
 ## Requirements
 
-- .NET 10 SDK
+- .NET 8 SDK or later (supports .NET 8 LTS and .NET 10)
 - MSBuild (included with .NET SDK)
 
 ## License
