@@ -3,7 +3,6 @@ using Microsoft.Build.Locator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol;
 
 // Register MSBuild before any Roslyn workspace usage
 if (!MSBuildLocator.IsRegistered)
@@ -20,7 +19,14 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 
 builder.Services.AddSingleton<RoslynWorkspaceService>();
 builder.Services
-    .AddMcpServer()
+    .AddMcpServer(options =>
+    {
+        options.ServerInfo = new()
+        {
+            Name = "DotnetCodingContextMCP",
+            Version = "0.4.0"
+        };
+    })
     .WithStdioServerTransport()
     .WithToolsFromAssembly();
 
