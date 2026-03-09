@@ -245,6 +245,7 @@ public sealed class RoslynWorkspaceService : IDisposable
                     ReturnType = method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
                     Signature = FormatMethodSignature(method),
                     MockSetup = GenerateMockSetup(method, mockingLibrary),
+                    ReturnTypeContext = ResolveReturnTypeContext(method.ReturnType),
                 });
             }
             else if (member is IPropertySymbol prop)
@@ -256,11 +257,45 @@ public sealed class RoslynWorkspaceService : IDisposable
                     ReturnType = propType,
                     Signature = $"{propType} {prop.Name} {{ {(prop.GetMethod != null ? "get; " : "")}{(prop.SetMethod != null ? "set; " : "")}}}",
                     MockSetup = GeneratePropertyMockSetup(prop, mockingLibrary),
+                    ReturnTypeContext = ResolveReturnTypeContext(prop.Type),
                 });
             }
         }
 
         return members;
+    }
+
+    private TypeCodingContext? ResolveReturnTypeContext(ITypeSymbol typeSymbol)
+    {
+        if (typeSymbol is not INamedTypeSymbol nts)
+            return null;
+
+        // Unwrap Task<T>, ValueTask<T>
+        var actualType = nts;
+        if (nts.IsGenericType &&
+            nts.Name is "Task" or "ValueTask" &&
+            nts.TypeArguments.Length == 1 &&
+            nts.TypeArguments[0] is INamedTypeSymbol inner)
+        {
+            actualType = inner;
+        }
+
+        // Unwrap Nullable<T>
+        if (actualType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T &&
+            actualType.TypeArguments[0] is INamedTypeSymbol nullableInner)
+        {
+            actualType = nullableInner;
+        }
+
+        // Skip primitives, system types, and collections without source
+        if (actualType.SpecialType != SpecialType.None)
+            return null;
+        if (actualType.TypeKind is TypeKind.Enum or TypeKind.Delegate)
+            return null;
+        if (!actualType.Locations.Any(l => l.IsInSource))
+            return null;
+
+        return BuildTypeCodingContext(actualType);
     }
 
     public HashSet<INamedTypeSymbol> CollectRelatedTypes(INamedTypeSymbol type)
