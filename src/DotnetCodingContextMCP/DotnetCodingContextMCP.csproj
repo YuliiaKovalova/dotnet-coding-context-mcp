@@ -10,7 +10,7 @@
     <PackageId>DotnetCodingContextMCP</PackageId>
     <ToolCommandName>coding-context-mcp</ToolCommandName>
     <IsPackable>true</IsPackable>
-    <Version>0.4.0</Version>
+    <Version>0.4.2</Version>
     <Authors>YuliiaKovalova</Authors>
     <PackageProjectUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/YuliiaKovalova/dotnet-coding-context-mcp</RepositoryUrl>
@@ -32,11 +32,13 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
+    
     <!-- Required by MSBuildLocator: exclude runtime assets to avoid conflicts with MSBuild loaded at runtime -->
     <PackageReference Include="Microsoft.Build" Version="17.7.2" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Framework" Version="17.11.31" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.7.2" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.7.2" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.StringTools" Version="17.7.2" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

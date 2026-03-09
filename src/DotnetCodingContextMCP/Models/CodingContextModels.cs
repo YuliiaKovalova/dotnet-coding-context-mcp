@@ -45,6 +45,7 @@ public sealed record InterfaceMember
     public required string ReturnType { get; init; }
     public required string Signature { get; init; }
     public required string MockSetup { get; init; }
+    public TypeCodingContext? ReturnTypeContext { get; init; }
 }
 
 public sealed record InterfaceContractResponse
